@@ -24,7 +24,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.75.0
 
       - name: Setup Solana
-        uses: exuus/setup-solana@v1
+        uses: metadaoproject/setup-solana@v1.0
         with:
           solana-cli-version: 1.18.22
 
