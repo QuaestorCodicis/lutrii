@@ -1,0 +1,47 @@
+# Docker ignore file for Lutrii builds
+# Excludes unnecessary files from Docker context
+
+# Build artifacts
+target/
+node_modules/
+.anchor/
+.ammanrc.js
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Mobile build artifacts
+mobile/android/app/build/
+mobile/ios/build/
+mobile/android/.gradle/
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

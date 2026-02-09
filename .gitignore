@@ -1,0 +1,69 @@
+# Anchor build artifacts
+target/
+.anchor/
+test-ledger/
+
+# Rust/Cargo
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Node/JavaScript
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Mobile build artifacts
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/build/
+mobile/ios/Pods/
+
+# React Native
+mobile/.expo/
+
+# Keypairs (NEVER commit private keys!)
+*-keypair.json
+*.key
+*.pem
+id.json
+wallet.json
+
+# Keep program keypairs for deployment
+!target/deploy/*-keypair.json
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Build logs
+build.log
+
+# Temporary files
+*.tmp
+.cache/
+
+# OS
+Thumbs.db
+
+# Solana validator
+ledger/
+config/

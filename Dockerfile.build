@@ -1,0 +1,21 @@
+# Lutrii Build Environment
+# Uses official Anchor Docker image for reproducible builds
+
+FROM backpackapp/build:v0.30.1
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy project files
+COPY . .
+
+# Install Node dependencies for tests
+RUN apt-get update && apt-get install -y nodejs npm
+RUN npm install -g yarn
+RUN yarn install
+
+# Build the programs
+RUN anchor build
+
+# The build artifacts will be in /workspace/target/
+CMD ["echo", "Build complete! Artifacts in /workspace/target/"]

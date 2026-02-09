@@ -1,0 +1,8 @@
+[build]
+# target = "sbf-solana-solana"  # Commented out - causes issues with cargo metadata
+
+[term]
+verbose = false
+
+[net]
+offline = false

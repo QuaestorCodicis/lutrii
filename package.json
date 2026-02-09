@@ -1,0 +1,66 @@
+{
+  "name": "lutrii",
+  "version": "1.0.0",
+  "description": "Privacy-first recurring payments on Solana Mobile",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "sdk/typescript",
+    "shared/types"
+  ],
+  "scripts": {
+    "build": "yarn build:contracts && yarn build:sdk",
+    "build:contracts": "cd programs && anchor build",
+    "build:sdk": "cd sdk/typescript && yarn build",
+    "test": "yarn test:contracts && yarn test:mobile",
+    "test:contracts": "cd programs && anchor test",
+    "test:mobile": "cd mobile && yarn test",
+    "deploy:devnet": "cd programs && anchor deploy --provider.cluster devnet",
+    "deploy:mainnet": "cd programs && anchor deploy --provider.cluster mainnet",
+    "mobile:android": "cd mobile && yarn android",
+    "mobile:ios": "cd mobile && yarn ios",
+    "mobile:start": "cd mobile && yarn start",
+    "lint": "yarn lint:ts && yarn lint:rust",
+    "lint:ts": "eslint '**/*.{ts,tsx}' --fix",
+    "lint:rust": "cd programs && cargo clippy --all-targets -- -D warnings",
+    "format": "yarn format:ts && yarn format:rust",
+    "format:ts": "prettier --write '**/*.{ts,tsx,json,md}'",
+    "format:rust": "cd programs && cargo fmt",
+    "clean": "yarn clean:contracts && yarn clean:mobile",
+    "clean:contracts": "cd programs && anchor clean",
+    "clean:mobile": "cd mobile && yarn clean",
+    "docs": "cd docs && yarn dev"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.3.9",
+    "@solana/web3.js": "^1.87.0",
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "bn.js": "^5.2.1",
+    "chai": "^4.3.10",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "mocha": "^10.2.0",
+    "prettier": "^3.1.0",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "yarn": ">=1.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lutrii/lutrii.git"
+  },
+  "author": "Lutrii Team",
+  "license": "MIT"
+}
