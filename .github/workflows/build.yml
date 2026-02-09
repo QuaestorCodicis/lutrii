@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
@@ -45,7 +45,7 @@ jobs:
           ls -la target/idl/*.json
 
       - name: Upload program artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lutrii-programs
           path: |
@@ -53,7 +53,7 @@ jobs:
             target/deploy/*-keypair.json
 
       - name: Upload IDL artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lutrii-idls
           path: target/idl/*.json
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: release-bundle
           path: lutrii-programs-*.tar.gz
@@ -79,10 +79,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
@@ -90,13 +90,13 @@ jobs:
         run: yarn install
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: lutrii-programs
           path: target/deploy
 
       - name: Download IDL artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: lutrii-idls
           path: target/idl
