@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v1.0
+        uses: metadaoproject/setup-anchor@v3.3
         with:
           anchor-version: '0.31.0'
           node-version: '20'
@@ -68,7 +68,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v1.0
+        uses: metadaoproject/setup-anchor@v3.3
         with:
           anchor-version: '0.31.0'
           node-version: '20'
