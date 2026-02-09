@@ -15,10 +15,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3.3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.75.0
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.22/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor 0.29.0
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.29.0 --locked --force
 
       - name: Build Anchor programs
         run: |
@@ -66,10 +78,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3.3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.75.0
 
       - name: Install dependencies
         run: yarn install
@@ -85,6 +100,15 @@ jobs:
         with:
           name: lutrii-idls
           path: target/idl
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.22/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor 0.29.0
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.29.0 --locked --force
 
       - name: Run tests
         run: |
