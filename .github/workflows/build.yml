@@ -20,9 +20,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.85.0
-
       - name: Install Solana CLI from GitHub releases
         run: |
           echo "Downloading Solana v1.18.22 from GitHub releases..."
