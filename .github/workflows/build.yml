@@ -23,24 +23,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.75.0
 
-      - name: Install Solana
-        run: |
-          # Retry logic for Solana installation
-          for i in {1..5}; do
-            if sh -c "$(curl -sSfL https://release.solana.com/v1.18.22/install)"; then
-              echo "Solana installed successfully"
-              break
-            else
-              echo "Attempt $i failed, retrying..."
-              sleep 10
-            fi
-          done
-          # Verify installation
-          if [ ! -d "$HOME/.local/share/solana/install/active_release/bin" ]; then
-            echo "ERROR: Solana installation failed!"
-            exit 1
-          fi
-          echo "PATH=$HOME/.local/share/solana/install/active_release/bin:$PATH" >> $GITHUB_ENV
+      - name: Setup Solana
+        uses: exuus/setup-solana@v1
+        with:
+          solana-cli-version: 1.18.22
 
       - name: Install Anchor 0.30.1
         run: |
