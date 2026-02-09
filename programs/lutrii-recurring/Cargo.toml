@@ -19,6 +19,7 @@ default = []
 [dependencies]
 anchor-lang = "0.30.1"
 anchor-spl = { version = "0.30.1", features = ["token_2022"] }
+lutrii-merchant-registry = { path = "../lutrii-merchant-registry", features = ["cpi"] }
 
 [dev-dependencies]
 solana-program-test = "1.17.0"

@@ -11,6 +11,7 @@ import {
   Connection,
   PublicKey,
   Transaction,
+  TransactionInstruction,
   SystemProgram,
   SYSVAR_CLOCK_PUBKEY,
 } from '@solana/web3.js';
@@ -22,16 +23,16 @@ import {
 import { walletService } from './walletService';
 import { useSubscriptionStore } from '@/store/subscriptionStore';
 
-// Program IDs (will be updated after deployment)
+// Program IDs - Updated with actual deployed addresses
 const LUTRII_RECURRING_PROGRAM_ID = new PublicKey(
-  'LutRec11111111111111111111111111111111111111'
+  '146BGDDLG4yRYXfNCCDdRRmCAYTrGddCgY14n4ekxJyF'
 );
 const LUTRII_MERCHANT_REGISTRY_PROGRAM_ID = new PublicKey(
-  'LutMer11111111111111111111111111111111111111'
+  '3RkcL88V6dyHRCJFyGZ54R1u1KcHqeYB24MA38894Eex'
 );
-const CLOCKWORK_PROGRAM_ID = new PublicKey(
-  'CLoCKWoRK11111111111111111111111111111111111'
-);
+
+// Note: Clockwork integration removed - using manual payment execution for MVP
+// Future: Integrate Clockwork or custom automation for automated payments
 
 // USDC Token-2022 Mint
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
@@ -192,15 +193,48 @@ export class BlockchainService {
         CLOCKWORK_PROGRAM_ID
       );
 
-      // Build transaction manually (since we don't have IDL loaded yet)
-      // In production, this would use: await this.recurringProgram.methods.createSubscription(...)
+      // ============================================================================
+      // TRANSACTION BUILDING - See TRANSACTION_BUILDING_GUIDE.md for full implementation
+      // ============================================================================
+
+      // Required: Install @coral-xyz/borsh for instruction serialization
+      // npm install @coral-xyz/borsh @noble/hashes
+
+      // Derive merchant account PDA from merchant registry (NEW: Week 2 enhancement)
+      const [merchantAccount] = PublicKey.findProgramAddressSync(
+        [Buffer.from(MERCHANT_SEED), merchantPubkey.toBuffer()],
+        LUTRII_MERCHANT_REGISTRY_PROGRAM_ID
+      );
+
+      // Build transaction
       const tx = new Transaction();
 
-      // TODO: Add the actual instruction once IDL is loaded
-      // For now, this is a placeholder structure
+      // TODO: Implement instruction data serialization with borsh
+      // See TRANSACTION_BUILDING_GUIDE.md Section 1 for complete implementation
+      //
+      // Required accounts (in order):
+      // 1. subscription (mut) - PDA
+      // 2. platformState (mut) - PDA
+      // 3. user (signer, mut) - userPublicKey
+      // 4. merchant - merchantAccount from registry (NEW: validated)
+      // 5. userTokenAccount (mut)
+      // 6. merchantTokenAccount (mut)
+      // 7. mint
+      // 8. tokenProgram - TOKEN_2022_PROGRAM_ID
+      // 9. systemProgram
+      //
+      // Instruction data:
+      // - discriminator (8 bytes): sha256("global:create_subscription")[:8]
+      // - amount (u64)
+      // - frequencySeconds (i64)
+      // - maxPerTransaction (u64)
+      // - lifetimeCap (u64)
+      // - merchantName (string)
+
       console.log('[BlockchainService] Creating subscription:', {
         user: userPublicKey.toBase58(),
         merchant: merchantPubkey.toBase58(),
+        merchantAccount: merchantAccount.toBase58(), // NEW: Validated merchant from registry
         amount: params.amount,
         frequency: params.frequencyDays,
       });
@@ -259,8 +293,11 @@ export class BlockchainService {
 
       // Build transaction
       const tx = new Transaction();
-      // TODO: Add pause instruction once IDL is loaded
-      // await this.recurringProgram.methods.pauseSubscription().accounts({...}).rpc()
+
+      // TODO: Implement pause instruction
+      // See TRANSACTION_BUILDING_GUIDE.md Section 2
+      // Accounts: subscription (mut), platformState, user (signer)
+      // Data: discriminator only (no parameters)
 
       const signature = await walletService.signAndSendTransaction(tx);
 
@@ -296,7 +333,11 @@ export class BlockchainService {
       );
 
       const tx = new Transaction();
-      // TODO: Add resume instruction
+
+      // TODO: Implement resume instruction
+      // See TRANSACTION_BUILDING_GUIDE.md Section 3
+      // Accounts: subscription (mut), platformState, user (signer), clock sysvar
+      // Data: discriminator only
 
       const signature = await walletService.signAndSendTransaction(tx);
 
@@ -331,7 +372,12 @@ export class BlockchainService {
       );
 
       const tx = new Transaction();
-      // TODO: Add cancel instruction
+
+      // TODO: Implement cancel instruction
+      // See TRANSACTION_BUILDING_GUIDE.md Section 4
+      // Accounts: subscription (mut), platformState (mut), user (signer, mut),
+      //           userTokenAccount (mut), merchant, tokenProgram
+      // Data: discriminator only
 
       const signature = await walletService.signAndSendTransaction(tx);
 
@@ -425,7 +471,11 @@ export class BlockchainService {
       );
 
       const tx = new Transaction();
-      // TODO: Add update_limits instruction
+
+      // TODO: Implement update_limits instruction
+      // See TRANSACTION_BUILDING_GUIDE.md Section 5
+      // Accounts: subscription (mut), platformState, user (signer)
+      // Data: discriminator + maxPerTransaction (u64) + lifetimeCap (u64)
 
       const signature = await walletService.signAndSendTransaction(tx);
 

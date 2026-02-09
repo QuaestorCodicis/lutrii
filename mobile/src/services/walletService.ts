@@ -214,6 +214,78 @@ export class WalletService {
   }
 
   /**
+   * Simulate transaction before sending to catch errors early
+   * SECURITY: Prevents wasting SOL on transactions that will fail
+   */
+  private async simulateTransaction(
+    transaction: Transaction | VersionedTransaction
+  ): Promise<void> {
+    try {
+      const simulation = await connection.simulateTransaction(
+        transaction,
+        { commitment: 'processed' }
+      );
+
+      // Check for simulation errors
+      if (simulation.value.err) {
+        const errorMessage = this.parseSimulationError(simulation.value.err);
+        throw new Error(`Transaction will fail: ${errorMessage}`);
+      }
+
+      // Check compute unit consumption
+      const computeUnits = simulation.value.unitsConsumed || 0;
+      if (computeUnits > 1_400_000) {
+        throw new Error(
+          `Transaction exceeds compute limit (${computeUnits.toLocaleString()} units). Please reduce complexity.`
+        );
+      }
+
+      console.log('[WalletService] Simulation successful:', {
+        computeUnits,
+        logs: simulation.value.logs?.slice(0, 3), // Show first 3 logs
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Transaction will fail')) {
+        throw error;
+      }
+      console.warn('[WalletService] Simulation warning:', error);
+      throw new Error('Unable to verify transaction. Please try again.');
+    }
+  }
+
+  /**
+   * Parse simulation errors into user-friendly messages
+   */
+  private parseSimulationError(error: any): string {
+    const errorStr = JSON.stringify(error);
+
+    // Common error patterns
+    if (errorStr.includes('InsufficientFunds') || errorStr.includes('insufficient funds')) {
+      return 'Insufficient SOL for transaction fees';
+    }
+    if (errorStr.includes('AccountNotFound')) {
+      return 'Token account not initialized. Please create it first.';
+    }
+    if (errorStr.includes('custom program error: 0x1')) {
+      return 'Subscription is not active';
+    }
+    if (errorStr.includes('custom program error: 0x2')) {
+      return 'Subscription is paused';
+    }
+    if (errorStr.includes('custom program error: 0x3')) {
+      return 'Payment not due yet';
+    }
+    if (errorStr.includes('InvalidAccountData')) {
+      return 'Invalid account data. Please refresh and try again.';
+    }
+    if (errorStr.includes('InvalidInstruction')) {
+      return 'Invalid transaction instruction';
+    }
+
+    return `Error: ${errorStr.slice(0, 100)}...`;
+  }
+
+  /**
    * Sign and send a transaction
    * @param transaction - Transaction to sign and send
    * @returns Transaction signature
@@ -226,6 +298,9 @@ export class WalletService {
     }
 
     try {
+      // ✅ SECURITY: Simulate transaction first to catch errors
+      await this.simulateTransaction(transaction);
+
       const signature = await transact(async (wallet: Web3MobileWallet) => {
         await wallet.reauthorize({
           auth_token: this.authToken!,

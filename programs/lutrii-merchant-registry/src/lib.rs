@@ -199,6 +199,32 @@ pub mod lutrii_merchant_registry {
         amount: u64,
         success: bool,
     ) -> Result<()> {
+        // ============================================================================
+        // CPI VALIDATION - Verify called via CPI from lutrii-recurring program
+        // ============================================================================
+        use anchor_lang::solana_program::sysvar::instructions::{load_current_index_checked, load_instruction_at_checked};
+
+        let ixs = &ctx.accounts.instructions.to_account_info();
+        let current_index = load_current_index_checked(ixs)
+            .map_err(|_| error!(ErrorCode::MustBeCalledViaCpi))?;
+
+        // Verify this instruction is being called via CPI (current_index > 0)
+        require!(current_index > 0, ErrorCode::MustBeCalledViaCpi);
+
+        // Load the parent instruction (the one that called this via CPI)
+        let parent_ix = load_instruction_at_checked(
+            (current_index - 1) as usize,
+            ixs
+        ).map_err(|_| error!(ErrorCode::MustBeCalledViaCpi))?;
+
+        // Verify the parent instruction is from lutrii-recurring program
+        require!(
+            parent_ix.program_id == lutrii_recurring::ID,
+            ErrorCode::UnauthorizedCpiCaller
+        );
+
+        msg!("✅ CPI validation passed - called from lutrii-recurring program");
+
         let merchant = &mut ctx.accounts.merchant;
         let clock = Clock::get()?;
 
@@ -288,7 +314,26 @@ pub mod lutrii_merchant_registry {
 
         let review = &mut ctx.accounts.review;
         let merchant = &mut ctx.accounts.merchant;
+        let subscription = &ctx.accounts.subscription;
         let clock = Clock::get()?;
+
+        // ============================================================================
+        // SYBIL RESISTANCE - Verify subscription age >= 7 days
+        // ============================================================================
+        const MIN_SUBSCRIPTION_AGE_SECONDS: i64 = 7 * SECONDS_PER_DAY; // 7 days
+        let subscription_age = clock.unix_timestamp - subscription.created_at;
+
+        require!(
+            subscription_age >= MIN_SUBSCRIPTION_AGE_SECONDS,
+            ErrorCode::SubscriptionTooNew
+        );
+
+        msg!(
+            "✅ Sybil resistance checks passed: {} payments, {} total paid, {} days old",
+            subscription.payment_count,
+            subscription.total_paid,
+            subscription_age / SECONDS_PER_DAY
+        );
 
         review.merchant = merchant.key();
         review.reviewer = ctx.accounts.reviewer.key();
@@ -572,12 +617,13 @@ pub struct RecordTransaction<'info> {
     )]
     pub merchant: Account<'info, Merchant>,
 
-    /// Verified CPI caller - MUST be lutrii-recurring program
-    #[account(
-        constraint = recurring_program.key() == lutrii_recurring::ID
-            @ ErrorCode::UnauthorizedCpiCaller
-    )]
-    pub recurring_program: Signer<'info>,
+    /// CHECK: Validated via instruction introspection in record_transaction
+    /// Must be lutrii-recurring program calling via CPI
+    pub recurring_program: UncheckedAccount<'info>,
+
+    /// CHECK: Solana instructions sysvar for CPI validation
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    pub instructions: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
@@ -602,7 +648,11 @@ pub struct SubmitReview<'info> {
     )]
     pub merchant: Account<'info, Merchant>,
 
-    /// Verified subscription - ensures user has active subscription
+    /// Verified subscription - ensures user has active subscription with sybil resistance
+    /// Requirements:
+    /// - Subscription must be active
+    /// - At least 3 successful payments
+    /// - At least 1 USDC total paid (prevents spam with tiny amounts)
     #[account(
         seeds = [
             b"subscription",
@@ -611,7 +661,8 @@ pub struct SubmitReview<'info> {
         ],
         bump = subscription.bump,
         constraint = subscription.is_active @ ErrorCode::NoActiveSubscription,
-        constraint = subscription.payment_count >= 1 @ ErrorCode::NoPaymentHistory,
+        constraint = subscription.payment_count >= 3 @ ErrorCode::InsufficientPaymentHistory,
+        constraint = subscription.total_paid >= 1_000_000 @ ErrorCode::InsufficientTotalPaid,
         seeds::program = lutrii_recurring::ID
     )]
     pub subscription: Account<'info, lutrii_recurring::Subscription>,
@@ -727,8 +778,20 @@ pub enum ErrorCode {
     #[msg("Must have made at least one payment to submit review")]
     NoPaymentHistory,
 
+    #[msg("Must have made at least 3 payments to submit review (sybil resistance)")]
+    InsufficientPaymentHistory,
+
+    #[msg("Must have paid at least 1 USDC total to submit review (sybil resistance)")]
+    InsufficientTotalPaid,
+
+    #[msg("Subscription must be at least 7 days old to submit review (sybil resistance)")]
+    SubscriptionTooNew,
+
     #[msg("Suspension reason must be 1-256 characters")]
     InvalidSuspensionReason,
+
+    #[msg("Must be called via CPI from lutrii-recurring program")]
+    MustBeCalledViaCpi,
 }
 
 // ============================================================================

@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_2022::{approve, transfer_checked, revoke, Approve};
 use anchor_spl::token_interface::{
-    approve_checked, transfer_checked, revoke, ApproveChecked, Mint, Revoke, TokenAccount,
-    TokenInterface, TransferChecked,
+    Mint, Revoke, TokenAccount, TokenInterface, TransferChecked,
 };
+use lutrii_merchant_registry::{self, Merchant as MerchantAccount, VerificationTier};
 
 declare_id!("146BGDDLG4yRYXfNCCDdRRmCAYTrGddCgY14n4ekxJyF");
 
@@ -93,6 +94,60 @@ pub mod lutrii_recurring {
         let platform = &ctx.accounts.platform_state;
         require!(!platform.emergency_pause, ErrorCode::SystemPaused);
 
+        // ============================================================================
+        // MERCHANT VALIDATION - Verify merchant is registered and verified
+        // ============================================================================
+        let merchant_account = &ctx.accounts.merchant;
+
+        // Deserialize merchant account and validate
+        let merchant_data = MerchantAccount::try_deserialize(
+            &mut merchant_account.try_borrow_data()?.as_ref()
+        )?;
+
+        // Verify merchant is verified (not Unverified or Suspended)
+        require!(
+            merchant_data.verification_tier != VerificationTier::Unverified,
+            ErrorCode::MerchantNotVerified
+        );
+        require!(
+            merchant_data.verification_tier != VerificationTier::Suspended,
+            ErrorCode::MerchantSuspended
+        );
+
+        // Verify merchant PDA seeds match
+        let merchant_owner = merchant_data.owner;
+        let expected_merchant_key = Pubkey::create_program_address(
+            &[
+                b"merchant",
+                merchant_owner.as_ref(),
+                &[merchant_data.bump],
+            ],
+            &lutrii_merchant_registry::ID,
+        ).map_err(|_| error!(ErrorCode::InvalidMerchantAccount))?;
+
+        require!(
+            expected_merchant_key == merchant_account.key(),
+            ErrorCode::InvalidMerchantAccount
+        );
+
+        // Verify merchant_token_account owner matches merchant owner wallet
+        require!(
+            ctx.accounts.merchant_token_account.owner == merchant_owner,
+            ErrorCode::InvalidTokenAccountOwner
+        );
+
+        // Verify merchant_token_account mint matches
+        require!(
+            ctx.accounts.merchant_token_account.mint == ctx.accounts.mint.key(),
+            ErrorCode::InvalidMint
+        );
+
+        msg!(
+            "✅ Merchant validated: {} (tier: {:?})",
+            merchant_data.business_name,
+            merchant_data.verification_tier
+        );
+
         // Validate inputs
         require!(
             frequency_seconds >= MIN_FREQUENCY_SECONDS,
@@ -138,18 +193,16 @@ pub mod lutrii_recurring {
 
         // Approve subscription PDA to spend user's tokens (delegation model)
         // This allows the PDA to execute payments on user's behalf
-        approve_checked(
+        approve(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
-                ApproveChecked {
+                Approve {
                     to: ctx.accounts.user_token_account.to_account_info(),
                     delegate: subscription.to_account_info(),
                     authority: ctx.accounts.user.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
                 },
             ),
             lifetime_cap,
-            ctx.accounts.mint.decimals,
         )?;
 
         // Update platform stats
@@ -184,6 +237,16 @@ pub mod lutrii_recurring {
         let subscription = &mut ctx.accounts.subscription;
         let platform = &mut ctx.accounts.platform_state;
         let clock = Clock::get()?;
+
+        // ============================================================================
+        // CHECKS - All validation logic
+        // ============================================================================
+
+        // REENTRANCY GUARD - Check payment not already in progress
+        require!(
+            !subscription.payment_in_progress,
+            ErrorCode::PaymentInProgress
+        );
 
         // Auto-reset daily volume if 24h passed
         if clock.unix_timestamp >= platform.last_volume_reset + SECONDS_PER_DAY {
@@ -248,6 +311,33 @@ pub mod lutrii_recurring {
             .checked_sub(fee)
             .ok_or(ErrorCode::InsufficientAmount)?;
 
+        // ============================================================================
+        // EFFECTS - Update state BEFORE external calls (CEI pattern)
+        // ============================================================================
+
+        // Set reentrancy guard
+        subscription.payment_in_progress = true;
+
+        // Update subscription state
+        subscription.last_payment = clock.unix_timestamp;
+        subscription.next_payment = clock.unix_timestamp + subscription.frequency_seconds;
+        subscription.total_paid = new_total;
+        subscription.payment_count = subscription
+            .payment_count
+            .checked_add(1)
+            .ok_or(ErrorCode::Overflow)?;
+
+        // Update platform stats
+        platform.total_volume_24h = new_volume;
+        platform.total_transactions = platform
+            .total_transactions
+            .checked_add(1)
+            .ok_or(ErrorCode::Overflow)?;
+
+        // ============================================================================
+        // INTERACTIONS - External calls AFTER state updates (CEI pattern)
+        // ============================================================================
+
         // Generate PDA signer seeds
         let seeds = &[
             b"subscription",
@@ -291,21 +381,8 @@ pub mod lutrii_recurring {
             )?;
         }
 
-        // Update subscription state
-        subscription.last_payment = clock.unix_timestamp;
-        subscription.next_payment = clock.unix_timestamp + subscription.frequency_seconds;
-        subscription.total_paid = new_total;
-        subscription.payment_count = subscription
-            .payment_count
-            .checked_add(1)
-            .ok_or(ErrorCode::Overflow)?;
-
-        // Update platform stats
-        platform.total_volume_24h = new_volume;
-        platform.total_transactions = platform
-            .total_transactions
-            .checked_add(1)
-            .ok_or(ErrorCode::Overflow)?;
+        // Clear reentrancy guard
+        subscription.payment_in_progress = false;
 
         emit!(PaymentExecuted {
             subscription: subscription.key(),
@@ -317,7 +394,7 @@ pub mod lutrii_recurring {
         });
 
         msg!(
-            "Payment executed: {} USDC (fee: {} USDC)",
+            "✅ Payment executed: {} USDC to merchant (fee: {} USDC)",
             merchant_amount as f64 / 1_000_000.0,
             fee as f64 / 1_000_000.0
         );
@@ -445,18 +522,16 @@ pub mod lutrii_recurring {
 
             // Update delegation amount if increasing cap
             if lifetime > subscription.lifetime_cap {
-                approve_checked(
+                approve(
                     CpiContext::new(
                         ctx.accounts.token_program.to_account_info(),
-                        ApproveChecked {
+                        Approve {
                             to: ctx.accounts.user_token_account.to_account_info(),
                             delegate: subscription.to_account_info(),
                             authority: ctx.accounts.user.to_account_info(),
-                            mint: ctx.accounts.mint.to_account_info(),
                         },
                     ),
                     lifetime,
-                    ctx.accounts.mint.decimals,
                 )?;
             }
 
@@ -546,6 +621,7 @@ pub struct Subscription {
     pub payment_count: u32,                // 4
     pub is_active: bool,                   // 1
     pub is_paused: bool,                   // 1
+    pub payment_in_progress: bool,         // 1 - REENTRANCY GUARD
     pub max_per_transaction: u64,          // 8
     pub lifetime_cap: u64,                 // 8
     pub merchant_name: String,             // 4 + 32
@@ -558,7 +634,7 @@ impl Subscription {
     pub const SPACE: usize = 8 + // discriminator
         32 + 32 + 32 + 32 + // pubkeys
         8 + 8 + 8 + 8 + 8 + 8 + // u64/i64 fields
-        4 + 1 + 1 + 8 + 8 + // counters and bools
+        4 + 1 + 1 + 1 + 8 + 8 + // counters and bools (added +1 for payment_in_progress)
         (4 + Self::MAX_NAME_LEN) + // string
         8 + 1; // created_at + bump
 }
@@ -609,8 +685,10 @@ pub struct CreateSubscription<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
-    /// CHECK: Merchant address - should be validated against merchant registry in production
-    pub merchant: UncheckedAccount<'info>,
+    /// Merchant account from merchant registry
+    /// Validated manually in create_subscription to avoid stack overflow
+    /// CHECK: Validated against merchant registry in create_subscription function
+    pub merchant: AccountInfo<'info>,
 
     #[account(
         mut,
@@ -619,11 +697,7 @@ pub struct CreateSubscription<'info> {
     )]
     pub user_token_account: InterfaceAccount<'info, TokenAccount>,
 
-    #[account(
-        mut,
-        constraint = merchant_token_account.owner == merchant.key() @ ErrorCode::InvalidTokenAccountOwner,
-        constraint = merchant_token_account.mint == mint.key() @ ErrorCode::InvalidMint
-    )]
+    #[account(mut)]
     pub merchant_token_account: InterfaceAccount<'info, TokenAccount>,
 
     pub mint: InterfaceAccount<'info, Mint>,
@@ -864,6 +938,9 @@ pub enum ErrorCode {
     #[msg("System is currently paused for emergency maintenance")]
     SystemPaused,
 
+    #[msg("Payment already in progress - reentrancy protection")]
+    PaymentInProgress,
+
     #[msg("Subscription is inactive and cannot be modified")]
     SubscriptionInactive,
 
@@ -932,6 +1009,15 @@ pub enum ErrorCode {
 
     #[msg("Unauthorized: only platform admin can perform this action")]
     UnauthorizedAdmin,
+
+    #[msg("Merchant must be verified to accept subscriptions")]
+    MerchantNotVerified,
+
+    #[msg("Merchant is suspended and cannot accept new subscriptions")]
+    MerchantSuspended,
+
+    #[msg("Invalid merchant account - PDA validation failed")]
+    InvalidMerchantAccount,
 }
 
 // ============================================================================
