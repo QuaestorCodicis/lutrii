@@ -28,7 +28,8 @@ jobs:
       - name: Install Anchor CLI via AVM
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install --force 0.30.1
+          rm -f $HOME/.cargo/bin/anchor
+          avm install 0.30.1
           avm use 0.30.1
           echo "$HOME/.avm/bin" >> $GITHUB_PATH
 
@@ -112,7 +113,8 @@ jobs:
       - name: Install Anchor CLI via AVM
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install --force 0.30.1
+          rm -f $HOME/.cargo/bin/anchor
+          avm install 0.30.1
           avm use 0.30.1
           echo "$HOME/.avm/bin" >> $GITHUB_PATH
 
