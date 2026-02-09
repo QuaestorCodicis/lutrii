@@ -32,8 +32,15 @@ jobs:
         run: |
           cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.30.1 --locked --force
 
+      - name: Verify Solana installation
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
+          cargo build-sbf --version
+
       - name: Build Anchor programs
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           anchor build
 
       - name: Verify build artifacts
