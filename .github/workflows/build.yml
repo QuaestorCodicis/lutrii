@@ -52,7 +52,7 @@ jobs:
 
       - name: Build Anchor programs
         run: |
-          rm -f Cargo.lock
+          find . -name "Cargo.lock" -type f -delete
           anchor build
 
       - name: Verify build artifacts
