@@ -25,13 +25,10 @@ jobs:
           sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Install Anchor CLI via AVM
+      - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          rm -f $HOME/.cargo/bin/anchor
-          avm install 0.30.1
-          avm use 0.30.1
-          echo "$HOME/.avm/bin" >> $GITHUB_PATH
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --locked --force
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Verify installations
         run: |
@@ -110,13 +107,10 @@ jobs:
           sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Install Anchor CLI via AVM
+      - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          rm -f $HOME/.cargo/bin/anchor
-          avm install 0.30.1
-          avm use 0.30.1
-          echo "$HOME/.avm/bin" >> $GITHUB_PATH
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --locked --force
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Run tests
         run: |
