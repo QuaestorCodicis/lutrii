@@ -32,6 +32,15 @@ jobs:
         run: |
           cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.30.1 --locked --force
 
+      - name: Debug Solana installation
+        run: |
+          echo "PATH: $PATH"
+          echo "Solana bin contents:"
+          ls -la $HOME/.local/share/solana/install/active_release/bin/
+          echo "Checking for cargo-build-sbf:"
+          which cargo-build-sbf || echo "cargo-build-sbf not found in PATH"
+          cargo --list | grep sbf || echo "No sbf commands found in cargo"
+
       - name: Build Anchor programs
         run: |
           anchor build
