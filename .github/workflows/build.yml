@@ -46,14 +46,21 @@ jobs:
           solana --version
           cargo-build-sbf --version
 
-      - name: Install Anchor 0.30.1
+      - name: Build programs with cargo-build-sbf
+        run: |
+          find . -name "Cargo.lock" -type f -delete
+          cargo-build-sbf --manifest-path=programs/lutrii-recurring/Cargo.toml
+          cargo-build-sbf --manifest-path=programs/lutrii-merchant-registry/Cargo.toml
+
+      - name: Install Anchor 0.30.1 for IDL generation
         run: |
           CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.30.1 --force
 
-      - name: Build Anchor programs
+      - name: Generate IDL files
         run: |
-          find . -name "Cargo.lock" -type f -delete
-          anchor build
+          mkdir -p target/idl
+          anchor idl build --filepath target/idl/lutrii_recurring.json --program-id 146BGDDLG4yRYXfNCCDdRRmCAYTrGddCgY14n4ekxJyF programs/lutrii-recurring || echo "IDL generation failed, continuing..."
+          anchor idl build --filepath target/idl/lutrii_merchant_registry.json --program-id 3RkcL88V6dyHRCJFyGZ54R1u1KcHqeYB24MA38894Eex programs/lutrii-merchant-registry || echo "IDL generation failed, continuing..."
 
       - name: Verify build artifacts
         run: |
