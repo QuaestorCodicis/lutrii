@@ -15,30 +15,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v1.0
         with:
+          anchor-version: '0.31.0'
           node-version: '20'
-
-      - name: Install Solana
-        run: |
-          for i in 1 2 3; do
-            sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && break || sleep 5
-          done
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-
-      - name: Install Anchor CLI via AVM
-        run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install 0.31.0
-          avm use 0.31.0
-          echo "$HOME/.avm/bin" >> $GITHUB_PATH
-
-      - name: Verify installations
-        run: |
-          solana --version
-          anchor --version
-          rustc --version
 
       - name: Build Anchor programs
         run: |
@@ -86,10 +67,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v1.0
         with:
-          node-version: '18'
+          anchor-version: '0.31.0'
+          node-version: '20'
 
       - name: Install dependencies
         run: yarn install
@@ -105,20 +87,6 @@ jobs:
         with:
           name: lutrii-idls
           path: target/idl
-
-      - name: Install Solana
-        run: |
-          for i in 1 2 3; do
-            sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && break || sleep 5
-          done
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-
-      - name: Install Anchor CLI via AVM
-        run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install 0.31.0
-          avm use 0.31.0
-          echo "$HOME/.avm/bin" >> $GITHUB_PATH
 
       - name: Run tests
         run: |
