@@ -28,6 +28,29 @@ jobs:
         with:
           solana-cli-version: 1.18.22
 
+      - name: Debug Solana installation
+        run: |
+          echo "=== Checking Solana installation ==="
+          which solana || echo "solana not in PATH"
+          solana --version || echo "solana command failed"
+          echo ""
+          echo "=== Checking for cargo build-sbf ==="
+          which cargo-build-sbf || echo "cargo-build-sbf not in PATH"
+          cargo-build-sbf --version || echo "cargo-build-sbf command failed"
+          echo ""
+          echo "=== Listing cargo commands with 'sbf' ==="
+          cargo --list | grep sbf || echo "No sbf commands found"
+          echo ""
+          echo "=== PATH variable ==="
+          echo $PATH
+          echo ""
+          echo "=== Solana bin directory contents ==="
+          if [ -d "$HOME/.local/share/solana/install/active_release/bin" ]; then
+            ls -la $HOME/.local/share/solana/install/active_release/bin/ | grep -E "(solana|cargo)" || echo "No solana/cargo binaries found"
+          else
+            echo "Solana bin directory does not exist"
+          fi
+
       - name: Install Anchor 0.30.1
         run: |
           cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.30.1 --locked --force
