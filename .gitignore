@@ -46,6 +46,7 @@ mobile/.expo/
 *.pem
 id.json
 wallet.json
+keypairs/
 
 # Keep program keypairs for deployment
 !target/deploy/*-keypair.json

@@ -6,6 +6,15 @@ use anchor_spl::token_interface::{
 };
 use lutrii_merchant_registry::{self, Merchant as MerchantAccount, VerificationTier};
 
+// Import new modular structure
+mod state;
+mod instructions;
+mod errors;
+
+pub use state::*;
+pub use instructions::*;
+pub use errors::ErrorCode;
+
 declare_id!("146BGDDLG4yRYXfNCCDdRRmCAYTrGddCgY14n4ekxJyF");
 
 // Constants
@@ -77,6 +86,24 @@ pub mod lutrii_recurring {
 
         msg!("Lutrii platform initialized - version {}", VERSION);
         Ok(())
+    }
+
+    /// Initialize platform configuration (Phase 1)
+    ///
+    /// Sets up fee collection wallets for USDC and USD1.
+    /// This is separate from platform_state and manages multi-token fee routing.
+    pub fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
+        instructions::initialize_config::handler(ctx)
+    }
+
+    /// Update platform configuration (Phase 1, admin only)
+    ///
+    /// Allows updating fee wallets or transferring admin authority.
+    pub fn update_config(
+        ctx: Context<UpdateConfig>,
+        new_authority: Option<Pubkey>,
+    ) -> Result<()> {
+        instructions::update_config::handler(ctx, new_authority)
     }
 
     /// Create a new subscription with token delegation
@@ -927,97 +954,6 @@ pub struct LimitsUpdated {
 pub struct EmergencyPauseActivated {
     pub timestamp: i64,
     pub reason: String,
-}
-
-// ============================================================================
-// Errors
-// ============================================================================
-
-#[error_code]
-pub enum ErrorCode {
-    #[msg("System is currently paused for emergency maintenance")]
-    SystemPaused,
-
-    #[msg("Payment already in progress - reentrancy protection")]
-    PaymentInProgress,
-
-    #[msg("Subscription is inactive and cannot be modified")]
-    SubscriptionInactive,
-
-    #[msg("Subscription is currently paused")]
-    SubscriptionPaused,
-
-    #[msg("Payment is not yet due - too early to execute")]
-    PaymentNotDue,
-
-    #[msg("Amount exceeds per-transaction safety cap")]
-    ExceedsTransactionCap,
-
-    #[msg("Total paid would exceed lifetime safety cap")]
-    ExceedsLifetimeCap,
-
-    #[msg("Daily volume limit exceeded - try again tomorrow")]
-    VelocityExceeded,
-
-    #[msg("Price changed more than 10% from original - safety check failed")]
-    PriceVarianceExceeded,
-
-    #[msg("Subscription is already paused")]
-    AlreadyPaused,
-
-    #[msg("Subscription is not paused")]
-    NotPaused,
-
-    #[msg("Insufficient amount to cover platform fee")]
-    InsufficientAmount,
-
-    #[msg("Arithmetic overflow detected")]
-    Overflow,
-
-    #[msg("Frequency must be at least 1 hour (3600 seconds)")]
-    FrequencyTooShort,
-
-    #[msg("Frequency cannot exceed 1 year (31536000 seconds)")]
-    FrequencyTooLong,
-
-    #[msg("Merchant name must be 1-32 characters")]
-    InvalidMerchantName,
-
-    #[msg("Amount must be greater than 0")]
-    AmountTooLow,
-
-    #[msg("Fee must be at least 0.01% (1 basis point)")]
-    FeeTooLow,
-
-    #[msg("Fee cannot exceed 5% (500 basis points)")]
-    FeeTooHigh,
-
-    #[msg("Token account owner does not match expected owner")]
-    InvalidTokenAccountOwner,
-
-    #[msg("Token account mint does not match expected mint")]
-    InvalidMint,
-
-    #[msg("Invalid token account provided")]
-    InvalidTokenAccount,
-
-    #[msg("Subscription must be inactive before closing")]
-    SubscriptionStillActive,
-
-    #[msg("Unauthorized: only subscription owner can perform this action")]
-    UnauthorizedUser,
-
-    #[msg("Unauthorized: only platform admin can perform this action")]
-    UnauthorizedAdmin,
-
-    #[msg("Merchant must be verified to accept subscriptions")]
-    MerchantNotVerified,
-
-    #[msg("Merchant is suspended and cannot accept new subscriptions")]
-    MerchantSuspended,
-
-    #[msg("Invalid merchant account - PDA validation failed")]
-    InvalidMerchantAccount,
 }
 
 // ============================================================================

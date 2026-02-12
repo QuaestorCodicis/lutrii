@@ -86,6 +86,13 @@ pub mod lutrii_merchant_registry {
         merchant.last_updated = clock.unix_timestamp;
         merchant.bump = ctx.bumps.merchant;
 
+        // Initialize multi-token fields (Phase 1)
+        // Default: no settlement token, no accepted tokens
+        // Merchant must call update_merchant_tokens to configure
+        merchant.settlement_token = Pubkey::default();
+        merchant.accepted_tokens = [Pubkey::default(); 4];
+        merchant.accepted_tokens_count = 0;
+
         // Update registry stats
         let registry = &mut ctx.accounts.registry_state;
         registry.total_merchants = registry
@@ -444,6 +451,96 @@ pub mod lutrii_merchant_registry {
         msg!("Merchant info updated");
         Ok(())
     }
+
+    /// Update merchant token configuration (Phase 1)
+    ///
+    /// Allows merchant to configure which tokens they accept and which
+    /// stablecoin they want to receive payments in.
+    ///
+    /// # Arguments
+    /// * `settlement_token` - Token merchant receives (must be USDC or USD1)
+    /// * `accepted_tokens` - List of tokens merchant accepts (1-4 tokens)
+    ///
+    /// # Requirements
+    /// - Settlement token must be USDC or USD1
+    /// - Settlement token must be in accepted_tokens list
+    /// - Can accept 1-4 different tokens
+    /// - Merchant must be verified (not Unverified or Suspended)
+    pub fn update_merchant_tokens(
+        ctx: Context<UpdateMerchantTokens>,
+        settlement_token: Pubkey,
+        accepted_tokens: Vec<Pubkey>,
+    ) -> Result<()> {
+        let merchant = &mut ctx.accounts.merchant;
+
+        // Validate merchant is verified
+        require!(
+            merchant.verification_tier != VerificationTier::Unverified,
+            ErrorCode::MerchantNotVerified
+        );
+        require!(
+            merchant.verification_tier != VerificationTier::Suspended,
+            ErrorCode::MerchantSuspended
+        );
+
+        // Validate settlement token is USDC or USD1
+        let usdc_mint = ctx.accounts.usdc_mint.key();
+        let usd1_mint = ctx.accounts.usd1_mint.key();
+
+        require!(
+            settlement_token == usdc_mint || settlement_token == usd1_mint,
+            ErrorCode::InvalidSettlementToken
+        );
+
+        // Validate accepted tokens count (1-4)
+        require!(
+            !accepted_tokens.is_empty() && accepted_tokens.len() <= 4,
+            ErrorCode::InvalidAcceptedTokensCount
+        );
+
+        // Validate settlement token is in accepted tokens
+        require!(
+            accepted_tokens.contains(&settlement_token),
+            ErrorCode::SettlementNotInAcceptedList
+        );
+
+        // Validate no duplicate tokens
+        for i in 0..accepted_tokens.len() {
+            for j in (i + 1)..accepted_tokens.len() {
+                require!(
+                    accepted_tokens[i] != accepted_tokens[j],
+                    ErrorCode::DuplicateToken
+                );
+            }
+        }
+
+        // Update merchant config
+        merchant.settlement_token = settlement_token;
+        merchant.accepted_tokens_count = accepted_tokens.len() as u8;
+
+        // Copy accepted tokens (pad with default if <4)
+        for i in 0..4 {
+            merchant.accepted_tokens[i] = if i < accepted_tokens.len() {
+                accepted_tokens[i]
+            } else {
+                Pubkey::default()
+            };
+        }
+
+        merchant.last_updated = Clock::get()?.unix_timestamp;
+
+        emit!(MerchantTokensUpdated {
+            merchant: merchant.key(),
+            settlement_token,
+            accepted_tokens_count: merchant.accepted_tokens_count,
+        });
+
+        msg!("✅ Merchant token config updated");
+        msg!("Settlement token: {}", settlement_token);
+        msg!("Accepted tokens: {}", merchant.accepted_tokens_count);
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -479,6 +576,19 @@ pub struct Merchant {
     pub created_at: i64,                // 8
     pub last_updated: i64,              // 8
     pub bump: u8,                       // 1
+
+    // ========================================================================
+    // PHASE 1: Multi-Token Support
+    // ========================================================================
+    /// Token merchant receives (settlement token) - must be USDC or USD1
+    pub settlement_token: Pubkey,       // 32
+
+    /// Tokens merchant accepts for payment (up to 4)
+    /// Examples: [SOL, USDC, USD1, SKR]
+    pub accepted_tokens: [Pubkey; 4],   // 32 * 4 = 128
+
+    /// Number of tokens in accepted_tokens array (0-4)
+    pub accepted_tokens_count: u8,      // 1
 }
 
 impl Merchant {
@@ -488,7 +598,18 @@ impl Merchant {
         (4 + MAX_WEBHOOK_URL_LEN) +
         (4 + MAX_CATEGORY_LEN) +
         1 + 4 + 8 + 8 + 4 + // verification_tier through failed_transactions
-        1 + 8 + 8 + 8 + 1; // premium_badge_active through bump
+        1 + 8 + 8 + 8 + 1 + // premium_badge_active through bump
+        32 + 128 + 1; // settlement_token + accepted_tokens + count
+
+    /// Check if a given token is accepted by this merchant
+    pub fn is_token_accepted(&self, token: &Pubkey) -> bool {
+        for i in 0..self.accepted_tokens_count as usize {
+            if self.accepted_tokens[i] == *token {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[account]
@@ -686,6 +807,27 @@ pub struct UpdateMerchantInfo<'info> {
     pub owner: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct UpdateMerchantTokens<'info> {
+    #[account(
+        mut,
+        seeds = [b"merchant", owner.key().as_ref()],
+        bump = merchant.bump,
+        has_one = owner @ ErrorCode::UnauthorizedMerchantOwner
+    )]
+    pub merchant: Account<'info, Merchant>,
+
+    pub owner: Signer<'info>,
+
+    /// USDC mint for validation
+    /// CHECK: Validated in handler
+    pub usdc_mint: AccountInfo<'info>,
+
+    /// USD1 mint for validation
+    /// CHECK: Validated in handler
+    pub usd1_mint: AccountInfo<'info>,
+}
+
 // ============================================================================
 // Events
 // ============================================================================
@@ -731,6 +873,13 @@ pub struct ReviewSubmitted {
     pub reviewer: Pubkey,
     pub rating: u8,
     pub new_score: i32,
+}
+
+#[event]
+pub struct MerchantTokensUpdated {
+    pub merchant: Pubkey,
+    pub settlement_token: Pubkey,
+    pub accepted_tokens_count: u8,
 }
 
 // ============================================================================
@@ -792,6 +941,27 @@ pub enum ErrorCode {
 
     #[msg("Must be called via CPI from lutrii-recurring program")]
     MustBeCalledViaCpi,
+
+    // ========================================================================
+    // Phase 1: Multi-Token Errors
+    // ========================================================================
+    #[msg("Settlement token must be USDC or USD1")]
+    InvalidSettlementToken,
+
+    #[msg("Must accept 1-4 tokens")]
+    InvalidAcceptedTokensCount,
+
+    #[msg("Settlement token must be in accepted tokens list")]
+    SettlementNotInAcceptedList,
+
+    #[msg("Duplicate token in accepted tokens list")]
+    DuplicateToken,
+
+    #[msg("Merchant not verified - cannot configure tokens")]
+    MerchantNotVerified,
+
+    #[msg("Merchant suspended - cannot configure tokens")]
+    MerchantSuspended,
 }
 
 // ============================================================================
